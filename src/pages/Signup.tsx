@@ -36,7 +36,7 @@ export default function Signup() {
     <div className="min-h-screen flex">
       {/* Left Panel */}
       <div className="hidden lg:flex lg:w-1/2 bg-surface-900 p-12 flex-col justify-between relative overflow-hidden">
-        <img src="/auth_bg.jpg" alt="StudyAI Background" className="absolute inset-0 w-full h-full object-cover opacity-50 mix-blend-overlay" />
+        <img src="/auth_bg.jpg" alt="Clevra Background" className="absolute inset-0 w-full h-full object-cover opacity-50 mix-blend-overlay" />
         <div className="absolute inset-0 bg-gradient-to-br from-purple-900/80 via-brand-800/80 to-brand-900/80" />
         <div className="absolute inset-0 opacity-20">
           <div className="absolute top-10 right-10 w-48 h-48 border border-white/20 rounded-2xl rotate-12" />
@@ -48,7 +48,7 @@ export default function Signup() {
             <div className="w-10 h-10 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center">
               <Brain size={20} className="text-white" />
             </div>
-            <span className="text-xl font-bold text-white">StudyAI</span>
+            <span className="text-xl font-bold text-white">Clevra</span>
           </Link>
         </div>
         <div className="relative space-y-6">
@@ -72,7 +72,7 @@ export default function Signup() {
           </div>
         </div>
         <div className="relative text-white/40 text-sm">
-          © 2025 StudyAI
+          © 2025 Clevra
         </div>
       </div>
 
@@ -84,7 +84,7 @@ export default function Signup() {
               <div className="w-8 h-8 bg-gradient-to-br from-brand-500 to-brand-700 rounded-lg flex items-center justify-center">
                 <Brain size={16} className="text-white" />
               </div>
-              <span className="text-lg font-bold text-surface-900">StudyAI</span>
+              <span className="text-lg font-bold text-surface-900">Clevra</span>
             </Link>
           </div>
 

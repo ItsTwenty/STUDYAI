@@ -77,7 +77,7 @@ export default function PricingPage() {
         toast('Sign up to get started!');
       }
     } else if (planName === 'Team') {
-      toast('Team plan - Contact sales@studyai.com');
+      toast('Team plan - Contact sales@clevra.com');
     }
   };
 
@@ -91,7 +91,7 @@ export default function PricingPage() {
               <div className="w-8 h-8 bg-gradient-to-br from-brand-500 to-brand-700 rounded-lg flex items-center justify-center">
                 <Brain size={16} className="text-white" />
               </div>
-              <span className="text-lg font-bold text-surface-900">StudyAI</span>
+              <span className="text-lg font-bold text-surface-900">Clevra</span>
             </Link>
             <div className="flex items-center gap-3">
               {isAuthenticated ? (
@@ -230,7 +230,7 @@ export default function PricingPage() {
 
       {/* Footer */}
       <footer className="border-t border-surface-100 py-8 px-4 text-center text-sm text-surface-400">
-        © 2025 StudyAI. All rights reserved.
+        © 2025 Clevra. All rights reserved.
       </footer>
     </div>
   );

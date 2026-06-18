@@ -36,7 +36,7 @@ export default function Sidebar({ mobile, onClose }: SidebarProps) {
           <div className="w-8 h-8 bg-gradient-to-br from-brand-500 to-brand-700 rounded-lg flex items-center justify-center">
             <Brain size={16} className="text-white" />
           </div>
-          <span className="text-lg font-bold text-surface-900">StudyAI</span>
+          <span className="text-lg font-bold text-surface-900">Clevra</span>
         </Link>
         {mobile ? (
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-100 text-surface-400 cursor-pointer">

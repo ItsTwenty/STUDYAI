@@ -10,24 +10,24 @@ export interface AIConfig {
 // Always read fresh from localStorage — never cache in memory
 export const setAIConfig = (newConfig: AIConfig) => {
   // Persist to localStorage
-  localStorage.setItem('studyai_openai_key', newConfig.apiKey);
+  localStorage.setItem('clevra_openai_key', newConfig.apiKey);
   if (newConfig.provider) {
-    localStorage.setItem('studyai_ai_provider', newConfig.provider);
+    localStorage.setItem('clevra_ai_provider', newConfig.provider);
   } else {
-    localStorage.removeItem('studyai_ai_provider');
+    localStorage.removeItem('clevra_ai_provider');
   }
   if (newConfig.model) {
-    localStorage.setItem('studyai_ai_model', newConfig.model);
+    localStorage.setItem('clevra_ai_model', newConfig.model);
   } else {
-    localStorage.removeItem('studyai_ai_model');
+    localStorage.removeItem('clevra_ai_model');
   }
 };
 
 export const getAIConfig = (): AIConfig | null => {
   // Always read fresh from localStorage so changes take effect immediately
-  const savedKey = localStorage.getItem('studyai_openai_key');
-  const savedProvider = localStorage.getItem('studyai_ai_provider') as 'openai' | 'openrouter' | null;
-  const savedModel = localStorage.getItem('studyai_ai_model') || undefined;
+  const savedKey = localStorage.getItem('clevra_openai_key');
+  const savedProvider = localStorage.getItem('clevra_ai_provider') as 'openai' | 'openrouter' | null;
+  const savedModel = localStorage.getItem('clevra_ai_model') || undefined;
 
   if (savedKey) {
     const provider = savedProvider || (savedKey.startsWith('sk-or-') ? 'openrouter' : 'openai');
@@ -37,9 +37,9 @@ export const getAIConfig = (): AIConfig | null => {
 };
 
 export const clearAIConfig = () => {
-  localStorage.removeItem('studyai_openai_key');
-  localStorage.removeItem('studyai_ai_provider');
-  localStorage.removeItem('studyai_ai_model');
+  localStorage.removeItem('clevra_openai_key');
+  localStorage.removeItem('clevra_ai_provider');
+  localStorage.removeItem('clevra_ai_model');
 };
 
 async function callOpenAI(prompt: string, systemPrompt: string): Promise<string> {
@@ -67,7 +67,7 @@ async function callOpenAI(prompt: string, systemPrompt: string): Promise<string>
 
   if (provider === 'openrouter') {
     headers['HTTP-Referer'] = window.location.origin || 'http://localhost:5173';
-    headers['X-Title'] = 'StudyAI';
+    headers['X-Title'] = 'Clevra';
   }
 
   const response = await fetch(apiUrl, {

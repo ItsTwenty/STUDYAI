@@ -15,7 +15,7 @@ const features = [
 ];
 
 const testimonials = [
-  { name: 'Sarah Chen', role: 'Medical Student', text: 'StudyAI cut my study time in half. The AI-generated flashcards are incredibly accurate and the quizzes really test my understanding.', rating: 5 },
+  { name: 'Sarah Chen', role: 'Medical Student', text: 'Clevra cut my study time in half. The AI-generated flashcards are incredibly accurate and the quizzes really test my understanding.', rating: 5 },
   { name: 'Marcus Johnson', role: 'Law Student', text: 'I upload my case briefs and get instant summaries and study materials. This is a game-changer for law school.', rating: 5 },
   { name: 'Priya Patel', role: 'PhD Researcher', text: 'The summary feature alone is worth the subscription. It helps me quickly review papers and identify key findings.', rating: 5 },
 ];
@@ -38,7 +38,7 @@ export default function Landing() {
               <div className="w-8 h-8 bg-gradient-to-br from-brand-500 to-brand-700 rounded-lg flex items-center justify-center">
                 <Brain size={16} className="text-white" />
               </div>
-              <span className="text-lg font-bold text-surface-900">StudyAI</span>
+              <span className="text-lg font-bold text-surface-900">Clevra</span>
             </Link>
             <div className="hidden md:flex items-center gap-8">
               <a href="#features" className="text-sm text-surface-500 hover:text-surface-900 transition-colors">Features</a>
@@ -120,7 +120,7 @@ export default function Landing() {
                 <div className="w-3 h-3 rounded-full bg-green-500/80" />
               </div>
               <div className="flex-1 flex justify-center">
-                <div className="px-4 py-1 rounded-md bg-surface-700/50 text-surface-400 text-xs">app.studyai.com/dashboard</div>
+                <div className="px-4 py-1 rounded-md bg-surface-700/50 text-surface-400 text-xs">app.clevra.com/dashboard</div>
               </div>
             </div>
             <div className="p-6 sm:p-8">
@@ -225,7 +225,7 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold text-surface-900 mb-4">Loved by students worldwide</h2>
-            <p className="text-surface-500 text-lg">See what our users are saying about StudyAI</p>
+            <p className="text-surface-500 text-lg">See what our users are saying about Clevra</p>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             {testimonials.map((testimonial) => (
@@ -282,7 +282,7 @@ export default function Landing() {
               <div className="w-8 h-8 bg-gradient-to-br from-brand-500 to-brand-700 rounded-lg flex items-center justify-center">
                 <Brain size={16} className="text-white" />
               </div>
-              <span className="text-lg font-bold text-surface-900">StudyAI</span>
+              <span className="text-lg font-bold text-surface-900">Clevra</span>
             </div>
             <div className="flex items-center gap-6 text-sm text-surface-500">
               <a href="#features" className="hover:text-surface-900 transition-colors">Features</a>
@@ -290,7 +290,7 @@ export default function Landing() {
               <a href="#" className="hover:text-surface-900 transition-colors">Privacy</a>
               <a href="#" className="hover:text-surface-900 transition-colors">Terms</a>
             </div>
-            <p className="text-sm text-surface-400">© 2025 StudyAI. All rights reserved.</p>
+            <p className="text-sm text-surface-400">© 2025 Clevra. All rights reserved.</p>
           </div>
         </div>
       </footer>

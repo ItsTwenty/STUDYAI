@@ -64,16 +64,11 @@ const sampleQuizQuestions = (docTitle: string): import('../types').QuizQuestion[
   { id: generateId(), question: 'Which of the following is NOT a limitation mentioned?', options: ['Sample size', 'Geographic diversity', 'Funding constraints', 'Selection bias'], correctAnswer: 2, explanation: 'While sample size, geographic diversity, and selection bias are acknowledged as limitations, funding constraints are not specifically mentioned.' },
 ];
 
-// One-time migration: reset paid models to free for OpenRouter users without credits
-if (!localStorage.getItem('studyai_migration_done')) {
-  const key = localStorage.getItem('studyai_openai_key');
-  const model = localStorage.getItem('studyai_ai_model');
-  const PAID_MODELS = ['google/gemini-2.5-flash', 'openai/gpt-4o-mini', 'openai/gpt-4o'];
-  if (key?.startsWith('sk-or-') && (!model || PAID_MODELS.includes(model))) {
-    localStorage.setItem('studyai_ai_model', 'meta-llama/llama-3.3-70b-instruct:free');
-    localStorage.setItem('studyai_ai_provider', 'openrouter');
-  }
-  localStorage.setItem('studyai_migration_done', '1');
+// Force-switch to a free model if a paid one is stored
+const currentModel = localStorage.getItem('clevra_ai_model');
+const PAID_MODELS = ['google/gemini-2.5-flash', 'openai/gpt-4o-mini', 'openai/gpt-4o'];
+if (currentModel && PAID_MODELS.includes(currentModel)) {
+  localStorage.setItem('clevra_ai_model', 'meta-llama/llama-3.3-70b-instruct:free');
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -81,13 +76,13 @@ export const useStore = create<AppState>((set, get) => ({
   isAuthenticated: false,
   isLoading: false,
   openAIKey: (() => {
-    const stored = localStorage.getItem('studyai_openai_key');
+    const stored = localStorage.getItem('clevra_openai_key');
     const oldKey = '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';
     if (stored && stored !== oldKey) return stored;
     const key = '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';
-    localStorage.setItem('studyai_openai_key', key);
-    localStorage.setItem('studyai_ai_provider', 'openrouter');
-    localStorage.setItem('studyai_ai_model', 'openai/gpt-4o');
+    localStorage.setItem('clevra_openai_key', key);
+    localStorage.setItem('clevra_ai_provider', 'openrouter');
+    localStorage.setItem('clevra_ai_model', 'meta-llama/llama-3.3-70b-instruct:free');
     return key;
   })(),
   documents: [],
@@ -158,9 +153,9 @@ export const useStore = create<AppState>((set, get) => ({
   upgradePlan: () => set((state) => ({ user: state.user ? { ...state.user, plan: 'premium' } : null })),
   setOpenAIKey: (key) => {
     if (key) {
-      localStorage.setItem('studyai_openai_key', key);
+      localStorage.setItem('clevra_openai_key', key);
     } else {
-      localStorage.removeItem('studyai_openai_key');
+      localStorage.removeItem('clevra_openai_key');
     }
     set({ openAIKey: key });
   },
@@ -176,7 +171,7 @@ export const useStore = create<AppState>((set, get) => ({
       ? 'https://openrouter.ai/api/v1/chat/completions'
       : 'https://api.openai.com/v1/chat/completions';
     
-    const savedModel = localStorage.getItem('studyai_ai_model');
+    const savedModel = localStorage.getItem('clevra_ai_model');
     const defaultModel = provider === 'openrouter' ? 'meta-llama/llama-3.3-70b-instruct:free' : 'gpt-4o-mini';
     const model = savedModel || defaultModel;
 
@@ -188,7 +183,7 @@ export const useStore = create<AppState>((set, get) => ({
 
       if (provider === 'openrouter') {
         headers['HTTP-Referer'] = window.location.origin || 'http://localhost:5173';
-        headers['X-Title'] = 'StudyAI';
+        headers['X-Title'] = 'Clevra';
       }
 
       const response = await fetch(apiUrl, {
