@@ -64,8 +64,8 @@ const sampleQuizQuestions = (docTitle: string): import('../types').QuizQuestion[
   { id: generateId(), question: 'Which of the following is NOT a limitation mentioned?', options: ['Sample size', 'Geographic diversity', 'Funding constraints', 'Selection bias'], correctAnswer: 2, explanation: 'While sample size, geographic diversity, and selection bias are acknowledged as limitations, funding constraints are not specifically mentioned.' },
 ];
 
-// Migration: if the stored model is a paid-only model but account has no credits, reset to free model
-(function migrateModel() {
+// One-time migration: reset paid models to free for OpenRouter users without credits
+if (!localStorage.getItem('studyai_migration_done')) {
   const key = localStorage.getItem('studyai_openai_key');
   const model = localStorage.getItem('studyai_ai_model');
   const PAID_MODELS = ['google/gemini-2.5-flash', 'openai/gpt-4o-mini', 'openai/gpt-4o'];
@@ -73,17 +73,18 @@ const sampleQuizQuestions = (docTitle: string): import('../types').QuizQuestion[
     localStorage.setItem('studyai_ai_model', 'meta-llama/llama-3.3-70b-instruct:free');
     localStorage.setItem('studyai_ai_provider', 'openrouter');
   }
-})();
+  localStorage.setItem('studyai_migration_done', '1');
+}
 
 export const useStore = create<AppState>((set, get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: false,
   openAIKey: localStorage.getItem('studyai_openai_key') || (() => {
-    const defaultKey = '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';
+    const defaultKey = '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';
     localStorage.setItem('studyai_openai_key', defaultKey);
     localStorage.setItem('studyai_ai_provider', 'openrouter');
-    localStorage.setItem('studyai_ai_model', 'meta-llama/llama-3.3-70b-instruct:free');
+    localStorage.setItem('studyai_ai_model', 'openai/gpt-4o');
     return defaultKey;
   })(),
   documents: [],
