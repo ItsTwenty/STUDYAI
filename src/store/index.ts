@@ -80,12 +80,15 @@ export const useStore = create<AppState>((set, get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: false,
-  openAIKey: localStorage.getItem('studyai_openai_key') || (() => {
-    const defaultKey = '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';
-    localStorage.setItem('studyai_openai_key', defaultKey);
+  openAIKey: (() => {
+    const stored = localStorage.getItem('studyai_openai_key');
+    const oldKey = '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';
+    if (stored && stored !== oldKey) return stored;
+    const key = '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';
+    localStorage.setItem('studyai_openai_key', key);
     localStorage.setItem('studyai_ai_provider', 'openrouter');
     localStorage.setItem('studyai_ai_model', 'openai/gpt-4o');
-    return defaultKey;
+    return key;
   })(),
   documents: [],
   selectedDocument: null,
