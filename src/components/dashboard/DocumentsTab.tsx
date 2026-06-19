@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect, memo } from 'react';
 import { useDropzone } from 'react-dropzone';
 import {
   Upload, FileText, Sparkles, Brain, GraduationCap,
@@ -13,72 +13,219 @@ import type { Document } from '../../types';
 import toast from 'react-hot-toast';
 import { extractTextFromPDF, generateSummary, generateFlashcards as generateFlashcardsAI, generateQuiz as generateQuizAI, getAIConfig } from '../../lib/ai';
 
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+  return debounced;
+}
+
+async function processFile(
+  file: File,
+  doc: Document,
+  addDocument: (doc: Document) => void,
+  updateDocument: (id: string, updates: Partial<Document>) => void,
+) {
+  addDocument(doc);
+
+  try {
+    updateDocument(doc.id, { status: 'processing' });
+    const extractedText = await extractTextFromPDF(file);
+
+    if (getAIConfig()?.apiKey && extractedText.length > 100) {
+      try {
+        const summary = await generateSummary(extractedText, doc.title);
+        updateDocument(doc.id, { status: 'ready', summary, content: extractedText });
+        toast.success(`✨ "${doc.title}" processed with AI!`);
+      } catch (error: any) {
+        updateDocument(doc.id, {
+          status: 'ready',
+          content: extractedText,
+          summary: `⚠️ AI Summary failed: ${error.message}. Try again by clicking the document.`
+        });
+        toast.error(`AI Error: ${error.message}`);
+      }
+    } else if (!getAIConfig()?.apiKey) {
+      updateDocument(doc.id, {
+        status: 'ready',
+        content: extractedText,
+        summary: `📄 Document has ${extractedText.split(' ').length} words. Click "Add API Key" to enable AI features.`
+      });
+      toast(`"${doc.title}" ready - Add API key for AI features`, { icon: '📄' });
+    } else {
+      updateDocument(doc.id, {
+        status: 'ready',
+        content: extractedText,
+        summary: `Document processed. Text: ${extractedText.length} characters.`
+      });
+      toast.success(`"${doc.title}" is ready!`);
+    }
+  } catch (error: any) {
+    console.error('Error processing PDF:', error);
+    updateDocument(doc.id, { status: 'error' });
+    toast.error(`Failed to process "${doc.title}": ${error.message}`);
+  }
+}
+
+const DocumentCard = memo(function DocumentCard({
+  doc,
+  selected,
+  generating,
+  menuOpen,
+  onSelect,
+  onGenerateFlashcards,
+  onGenerateQuiz,
+  onToggleMenu,
+  onDelete,
+}: {
+  doc: Document;
+  selected: boolean;
+  generating: string | null;
+  menuOpen: string | null;
+  onSelect: (doc: Document) => void;
+  onGenerateFlashcards: (doc: Document) => void;
+  onGenerateQuiz: (doc: Document) => void;
+  onToggleMenu: (id: string | null) => void;
+  onDelete: (id: string) => void;
+}) {
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  return (
+    <div
+      className={`group p-4 rounded-xl border transition-all duration-200 cursor-pointer ${
+        selected
+          ? 'border-brand-200 bg-brand-50/50 shadow-sm'
+          : 'border-surface-200 bg-white hover:border-surface-300 hover:shadow-sm'
+      }`}
+      onClick={() => onSelect(doc)}
+    >
+      <div className="flex items-start gap-4">
+        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-red-50 to-red-100 flex items-center justify-center flex-shrink-0">
+          <FileText size={18} className="text-red-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="text-sm font-semibold text-surface-900 truncate">{doc.title}</h3>
+            <Badge variant={doc.status === 'ready' ? 'success' : doc.status === 'processing' ? 'warning' : doc.status === 'error' ? 'error' : 'default'}>
+              {doc.status === 'ready' && <CheckCircle2 size={10} className="mr-1" />}
+              {doc.status === 'processing' && <Loader2 size={10} className="mr-1 animate-spin" />}
+              {doc.status === 'uploading' && <Loader2 size={10} className="mr-1 animate-spin" />}
+              {doc.status === 'error' && <AlertCircle size={10} className="mr-1" />}
+              {doc.status}
+            </Badge>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-surface-400">
+            <span>{formatFileSize(doc.fileSize)}</span>
+            <span>•</span>
+            <span className="flex items-center gap-1"><Clock size={10} />{formatDate(doc.createdAt)}</span>
+          </div>
+          {doc.summary && selected && (
+            <div className="mt-3 p-3 rounded-lg bg-surface-50 border border-surface-100">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-brand-600 mb-1.5">
+                <Sparkles size={12} />
+                AI Summary
+              </div>
+              <p className="text-sm text-surface-600 leading-relaxed">{doc.summary}</p>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {doc.status === 'ready' && (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); onGenerateFlashcards(doc); }}
+                disabled={generating === `flashcards-${doc.id}`}
+                className="p-2 rounded-lg hover:bg-surface-100 text-surface-400 hover:text-brand-600 transition-colors disabled:opacity-50 cursor-pointer"
+                title="Generate Flashcards"
+              >
+                {generating === `flashcards-${doc.id}` ? <Loader2 size={16} className="animate-spin" /> : <Brain size={16} />}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onGenerateQuiz(doc); }}
+                disabled={generating === `quiz-${doc.id}`}
+                className="p-2 rounded-lg hover:bg-surface-100 text-surface-400 hover:text-brand-600 transition-colors disabled:opacity-50 cursor-pointer"
+                title="Generate Quiz"
+              >
+                {generating === `quiz-${doc.id}` ? <Loader2 size={16} className="animate-spin" /> : <GraduationCap size={16} />}
+              </button>
+            </>
+          )}
+          <div className="relative">
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleMenu(menuOpen === doc.id ? null : doc.id); }}
+              className="p-2 rounded-lg hover:bg-surface-100 text-surface-400 hover:text-surface-600 transition-colors cursor-pointer"
+            >
+              <MoreHorizontal size={16} />
+            </button>
+            {menuOpen === doc.id && (
+              <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl border border-surface-200 shadow-lg py-1 z-10">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDelete(doc.id); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
+                >
+                  <Trash2 size={14} />
+                  Delete Document
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 export default function DocumentsTab() {
-  const { documents, addDocument, updateDocument, removeDocument, selectedDocument, setSelectedDocument, addFlashcardSet, addQuiz, user } = useStore();
+  const documents = useStore(s => s.documents);
+  const addDocument = useStore(s => s.addDocument);
+  const updateDocument = useStore(s => s.updateDocument);
+  const removeDocument = useStore(s => s.removeDocument);
+  const selectedDocument = useStore(s => s.selectedDocument);
+  const setSelectedDocument = useStore(s => s.setSelectedDocument);
+  const addFlashcardSet = useStore(s => s.addFlashcardSet);
+  const addQuiz = useStore(s => s.addQuiz);
+  const user = useStore(s => s.user);
   const [showUpload, setShowUpload] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const debouncedSearch = useDebounce(searchQuery, 200);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    acceptedFiles.forEach(async (file) => {
-      const doc: Document = {
-        id: generateId(),
-        userId: user?.id || '',
-        title: file.name.replace('.pdf', ''),
-        fileName: file.name,
-        fileSize: file.size,
-        status: 'uploading',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      addDocument(doc);
-      
-      try {
-        updateDocument(doc.id, { status: 'processing' });
-        const extractedText = await extractTextFromPDF(file);
-        
-        console.log('Extracted text length:', extractedText.length);
-        console.log('API key exists:', !!getAIConfig()?.apiKey);
-        
-        if (getAIConfig()?.apiKey && extractedText.length > 100) {
-          try {
-            console.log('Generating AI summary...');
-            const summary = await generateSummary(extractedText, doc.title);
-            console.log('Summary generated:', summary.substring(0, 100));
-            updateDocument(doc.id, { status: 'ready', summary, content: extractedText });
-            toast.success(`✨ "${doc.title}" processed with AI!`);
-          } catch (error: any) {
-            console.error('AI Summary error:', error.message);
-            updateDocument(doc.id, { 
-              status: 'ready', 
-              content: extractedText,
-              summary: `⚠️ AI Summary failed: ${error.message}. Try again by clicking the document.`
-            });
-            toast.error(`AI Error: ${error.message}`);
-          }
-        } else if (!getAIConfig()?.apiKey) {
-          updateDocument(doc.id, { 
-            status: 'ready', 
-            content: extractedText,
-            summary: `📄 Document has ${extractedText.split(' ').length} words. Click "Add API Key" to enable AI features.`
-          });
-          toast(`"${doc.title}" ready - Add API key for AI features`, { icon: '📄' });
-        } else {
-          updateDocument(doc.id, { 
-            status: 'ready', 
-            content: extractedText,
-            summary: `Document processed. Text: ${extractedText.length} characters.`
-          });
-          toast.success(`"${doc.title}" is ready!`);
-        }
-      } catch (error: any) {
-        console.error('Error processing PDF:', error);
-        updateDocument(doc.id, { status: 'error' });
-        toast.error(`Failed to process "${doc.title}": ${error.message}`);
-      }
-    });
     setShowUpload(false);
+    (async () => {
+      for (const file of acceptedFiles) {
+        if (!mountedRef.current) return;
+        const doc: Document = {
+          id: generateId(),
+          userId: user?.id || '',
+          title: file.name.replace('.pdf', ''),
+          fileName: file.name,
+          fileSize: file.size,
+          status: 'uploading',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        await processFile(file, doc, addDocument, updateDocument);
+      }
+    })();
   }, [addDocument, updateDocument, user]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -165,19 +312,8 @@ export default function DocumentsTab() {
   };
 
   const filteredDocs = documents.filter(d =>
-    d.title.toLowerCase().includes(searchQuery.toLowerCase())
+    d.title.toLowerCase().includes(debouncedSearch.toLowerCase())
   );
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / 1048576).toFixed(1) + ' MB';
-  };
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
 
   return (
     <div>
@@ -219,88 +355,18 @@ export default function DocumentsTab() {
       ) : (
         <div className="space-y-3">
           {filteredDocs.map((doc) => (
-            <div
+            <DocumentCard
               key={doc.id}
-              className={`group p-4 rounded-xl border transition-all duration-200 cursor-pointer ${
-                selectedDocument?.id === doc.id
-                  ? 'border-brand-200 bg-brand-50/50 shadow-sm'
-                  : 'border-surface-200 bg-white hover:border-surface-300 hover:shadow-sm'
-              }`}
-              onClick={() => setSelectedDocument(doc)}
-            >
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-red-50 to-red-100 flex items-center justify-center flex-shrink-0">
-                  <FileText size={18} className="text-red-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="text-sm font-semibold text-surface-900 truncate">{doc.title}</h3>
-                    <Badge variant={doc.status === 'ready' ? 'success' : doc.status === 'processing' ? 'warning' : doc.status === 'error' ? 'error' : 'default'}>
-                      {doc.status === 'ready' && <CheckCircle2 size={10} className="mr-1" />}
-                      {doc.status === 'processing' && <Loader2 size={10} className="mr-1 animate-spin" />}
-                      {doc.status === 'uploading' && <Loader2 size={10} className="mr-1 animate-spin" />}
-                      {doc.status === 'error' && <AlertCircle size={10} className="mr-1" />}
-                      {doc.status}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-surface-400">
-                    <span>{formatFileSize(doc.fileSize)}</span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1"><Clock size={10} />{formatDate(doc.createdAt)}</span>
-                  </div>
-                  {doc.summary && selectedDocument?.id === doc.id && (
-                    <div className="mt-3 p-3 rounded-lg bg-surface-50 border border-surface-100">
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-brand-600 mb-1.5">
-                        <Sparkles size={12} />
-                        AI Summary
-                      </div>
-                      <p className="text-sm text-surface-600 leading-relaxed">{doc.summary}</p>
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  {doc.status === 'ready' && (
-                    <>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); generateFlashcards(doc); }}
-                        disabled={generating === `flashcards-${doc.id}`}
-                        className="p-2 rounded-lg hover:bg-surface-100 text-surface-400 hover:text-brand-600 transition-colors disabled:opacity-50 cursor-pointer"
-                        title="Generate Flashcards"
-                      >
-                        {generating === `flashcards-${doc.id}` ? <Loader2 size={16} className="animate-spin" /> : <Brain size={16} />}
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); generateQuiz(doc); }}
-                        disabled={generating === `quiz-${doc.id}`}
-                        className="p-2 rounded-lg hover:bg-surface-100 text-surface-400 hover:text-brand-600 transition-colors disabled:opacity-50 cursor-pointer"
-                        title="Generate Quiz"
-                      >
-                        {generating === `quiz-${doc.id}` ? <Loader2 size={16} className="animate-spin" /> : <GraduationCap size={16} />}
-                      </button>
-                    </>
-                  )}
-                  <div className="relative">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setMenuOpen(menuOpen === doc.id ? null : doc.id); }}
-                      className="p-2 rounded-lg hover:bg-surface-100 text-surface-400 hover:text-surface-600 transition-colors cursor-pointer"
-                    >
-                      <MoreHorizontal size={16} />
-                    </button>
-                    {menuOpen === doc.id && (
-                      <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl border border-surface-200 shadow-lg py-1 z-10">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); removeDocument(doc.id); setMenuOpen(null); toast.success('Document deleted'); }}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
-                        >
-                          <Trash2 size={14} />
-                          Delete Document
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
+              doc={doc}
+              selected={selectedDocument?.id === doc.id}
+              generating={generating}
+              menuOpen={menuOpen}
+              onSelect={setSelectedDocument}
+              onGenerateFlashcards={generateFlashcards}
+              onGenerateQuiz={generateQuiz}
+              onToggleMenu={setMenuOpen}
+              onDelete={(id) => { removeDocument(id); setMenuOpen(null); toast.success('Document deleted'); }}
+            />
           ))}
         </div>
       )}

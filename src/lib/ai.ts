@@ -205,28 +205,51 @@ correctAnswer is the index (0-3) of the correct option. Make questions progressi
   }
 }
 
-// Extract text from PDF using PDF.js
-export async function extractTextFromPDF(file: File): Promise<string> {
-  const pdfjsLib: any = await import('pdfjs-dist');
+// Lazy singleton cache for pdfjs-dist
+let pdfjsInstance: any = null;
+let workerInitialized = false;
 
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs';
+async function getPdfjs() {
+  if (!pdfjsInstance) {
+    pdfjsInstance = await import('pdfjs-dist');
+  }
+  if (!workerInitialized) {
+    pdfjsInstance.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs';
+    workerInitialized = true;
+  }
+  return pdfjsInstance;
+}
+
+// Extract text from PDF using PDF.js with parallel page processing
+export async function extractTextFromPDF(file: File): Promise<string> {
+  const pdfjsLib = await getPdfjs();
 
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const totalPages = pdf.numPages;
 
-  let fullText = '';
+  const pageTexts: string[] = new Array(totalPages);
 
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const textContent = await page.getTextContent();
-
-    const pageText = textContent.items
-      .map((item: any) => item.str || '')
-      .join(' ');
-
-    fullText += pageText + '\n\n';
+  const CONCURRENCY = 4;
+  for (let start = 1; start <= totalPages; start += CONCURRENCY) {
+    const end = Math.min(start + CONCURRENCY - 1, totalPages);
+    const batch = [];
+    for (let i = start; i <= end; i++) {
+      batch.push(
+        pdf.getPage(i).then(async (page: any) => {
+          const textContent = await page.getTextContent();
+          return textContent.items
+            .map((item: any) => item.str || '')
+            .join(' ');
+        })
+      );
+    }
+    const results = await Promise.all(batch);
+    for (let i = 0; i < results.length; i++) {
+      pageTexts[start - 1 + i] = results[i];
+    }
   }
 
-  return fullText.trim();
+  return pageTexts.filter(Boolean).join('\n\n').trim();
 }
