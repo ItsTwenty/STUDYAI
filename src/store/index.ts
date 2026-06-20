@@ -64,26 +64,12 @@ const sampleQuizQuestions = (docTitle: string): import('../types').QuizQuestion[
   { id: generateId(), question: 'Which of the following is NOT a limitation mentioned?', options: ['Sample size', 'Geographic diversity', 'Funding constraints', 'Selection bias'], correctAnswer: 2, explanation: 'While sample size, geographic diversity, and selection bias are acknowledged as limitations, funding constraints are not specifically mentioned.' },
 ];
 
-// Force-switch to a free model if a paid one is stored
-const currentModel = localStorage.getItem('clevra_ai_model');
-const PAID_MODELS = ['google/gemini-2.5-flash', 'openai/gpt-4o-mini', 'openai/gpt-4o'];
-if (currentModel && PAID_MODELS.includes(currentModel)) {
-  localStorage.setItem('clevra_ai_model', 'meta-llama/llama-3.3-70b-instruct:free');
-}
-
 export const useStore = create<AppState>((set, get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: false,
   openAIKey: (() => {
-    const stored = localStorage.getItem('clevra_openai_key');
-    const oldKey = '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';
-    if (stored && stored !== oldKey) return stored;
-    const key = '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';
-    localStorage.setItem('clevra_openai_key', key);
-    localStorage.setItem('clevra_ai_provider', 'openrouter');
-    localStorage.setItem('clevra_ai_model', 'meta-llama/llama-3.3-70b-instruct:free');
-    return key;
+    return localStorage.getItem('clevra_openai_key') || null;
   })(),
   documents: [],
   selectedDocument: null,
@@ -166,16 +152,47 @@ export const useStore = create<AppState>((set, get) => ({
       throw new Error("API key is not set. Please add it in your settings.");
     }
 
-    const provider = openAIKey.startsWith('sk-or-') ? 'openrouter' : 'openai';
-    const apiUrl = provider === 'openrouter'
-      ? 'https://openrouter.ai/api/v1/chat/completions'
-      : 'https://api.openai.com/v1/chat/completions';
-    
+    let provider = 'openai';
+    if (openAIKey.startsWith('sk-or-')) provider = 'openrouter';
+    else if (openAIKey.startsWith('AIza') || openAIKey.startsWith('AQ.')) provider = 'gemini';
+
     const savedModel = localStorage.getItem('clevra_ai_model');
-    const defaultModel = provider === 'openrouter' ? 'meta-llama/llama-3.3-70b-instruct:free' : 'gpt-4o-mini';
+    let defaultModel = 'gpt-4o-mini';
+    if (provider === 'openrouter') defaultModel = 'meta-llama/llama-3.3-70b-instruct:free';
+    if (provider === 'gemini') defaultModel = 'gemini-2.5-flash';
+    
     const model = savedModel || defaultModel;
 
     try {
+      if (provider === 'gemini') {
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${openAIKey}`;
+        const response = await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: input }] }],
+            generationConfig: { temperature: 0.7 }
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          if (response.status === 400 && error.error?.message?.includes('API key not valid')) {
+            throw new Error('Invalid Gemini API key.');
+          }
+          throw new Error(error.error?.message || `API error: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        return {
+          choices: [{ message: { content: data.candidates?.[0]?.content?.parts?.[0]?.text || '' } }]
+        };
+      }
+
+      const apiUrl = provider === 'openrouter'
+        ? 'https://openrouter.ai/api/v1/chat/completions'
+        : 'https://api.openai.com/v1/chat/completions';
+
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${openAIKey}`

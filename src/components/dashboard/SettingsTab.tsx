@@ -22,6 +22,13 @@ const OPENROUTER_MODELS = [
   { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini via OR (paid)' },
 ];
 
+const GEMINI_MODELS = [
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
+  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
+];
+
 export default function SettingsTab() {
   const { user, setUser, upgradePlan, openAIKey, setOpenAIKey, generateAIResponse } = useStore();
   const [isTesting, setIsTesting] = useState(false);
@@ -29,17 +36,21 @@ export default function SettingsTab() {
   const [email, setEmail] = useState(user?.email || '');
   const [apiKey, setApiKey] = useState(openAIKey || '');
   
-  const [provider, setProvider] = useState<'openai' | 'openrouter'>(() => {
+  const [provider, setProvider] = useState<'openai' | 'openrouter' | 'gemini'>(() => {
     const savedConfig = getAIConfig();
     if (savedConfig?.provider) return savedConfig.provider;
-    return apiKey.startsWith('sk-or-') ? 'openrouter' : 'openai';
+    if (apiKey.startsWith('sk-or-')) return 'openrouter';
+    if (apiKey.startsWith('AIza') || apiKey.startsWith('AQ.')) return 'gemini';
+    return 'openai';
   });
   
   const [model, setModel] = useState<string>(() => {
     const savedConfig = getAIConfig();
     if (savedConfig?.model) return savedConfig.model;
     // Default to the free Llama model for OpenRouter
-    return provider === 'openrouter' ? 'meta-llama/llama-3.3-70b-instruct:free' : 'gpt-4o-mini';
+    if (provider === 'openrouter') return 'meta-llama/llama-3.3-70b-instruct:free';
+    if (provider === 'gemini') return 'gemini-2.5-flash';
+    return 'gpt-4o-mini';
   });
 
   const [notifications, setNotifications] = useState({
@@ -52,14 +63,22 @@ export default function SettingsTab() {
 
   const handleKeyChange = (val: string) => {
     setApiKey(val);
-    const newProvider = val.startsWith('sk-or-') ? 'openrouter' : 'openai';
+    let newProvider: 'openai' | 'openrouter' | 'gemini' = 'openai';
+    if (val.startsWith('sk-or-')) newProvider = 'openrouter';
+    else if (val.startsWith('AIza') || val.startsWith('AQ.')) newProvider = 'gemini';
+    
     setProvider(newProvider);
-    setModel(newProvider === 'openrouter' ? 'meta-llama/llama-3.3-70b-instruct:free' : 'gpt-4o-mini');
+    if (newProvider === 'openrouter') setModel('meta-llama/llama-3.3-70b-instruct:free');
+    else if (newProvider === 'gemini') setModel('gemini-2.5-flash');
+    else setModel('gpt-4o-mini');
   };
 
   const saveAPIKey = () => {
     if (apiKey.trim()) {
-      const detectedProvider = apiKey.trim().startsWith('sk-or-') ? 'openrouter' : 'openai';
+      let detectedProvider: 'openai' | 'openrouter' | 'gemini' = 'openai';
+      if (apiKey.trim().startsWith('sk-or-')) detectedProvider = 'openrouter';
+      else if (apiKey.trim().startsWith('AIza') || apiKey.trim().startsWith('AQ.')) detectedProvider = 'gemini';
+      
       setAIConfig({
         apiKey: apiKey.trim(),
         provider: detectedProvider,
@@ -270,11 +289,11 @@ export default function SettingsTab() {
                       </div>
                       <div>
                         <h4 className="font-medium text-surface-900">
-                          {getAIConfig()?.provider === 'openrouter' ? 'OpenRouter Connected' : 'OpenAI Connected'}
+                          {getAIConfig()?.provider === 'openrouter' ? 'OpenRouter Connected' : getAIConfig()?.provider === 'gemini' ? 'Google Gemini Connected' : 'OpenAI Connected'}
                         </h4>
                         <p className="text-sm text-surface-500">API Key: ••••••••{openAIKey?.slice(-4)}</p>
                         <p className="text-xs text-surface-400 mt-0.5">
-                          Model: <code className="bg-green-100/50 px-1 py-0.5 rounded text-green-700 font-mono text-[10px]">{getAIConfig()?.model || (getAIConfig()?.provider === 'openrouter' ? 'google/gemini-2.5-flash' : 'gpt-4o-mini')}</code>
+                          Model: <code className="bg-green-100/50 px-1 py-0.5 rounded text-green-700 font-mono text-[10px]">{getAIConfig()?.model || (getAIConfig()?.provider === 'openrouter' ? 'google/gemini-2.5-flash' : getAIConfig()?.provider === 'gemini' ? 'gemini-2.5-flash' : 'gpt-4o-mini')}</code>
                         </p>
                       </div>
                     </div>
@@ -314,7 +333,7 @@ export default function SettingsTab() {
                       }}
                       className="w-full px-3 py-2.5 rounded-lg border border-surface-200 bg-white text-sm text-surface-700 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                     >
-                      {(getAIConfig()?.provider === 'openrouter' ? OPENROUTER_MODELS : OPENAI_MODELS).map((m) => (
+                      {(getAIConfig()?.provider === 'openrouter' ? OPENROUTER_MODELS : getAIConfig()?.provider === 'gemini' ? GEMINI_MODELS : OPENAI_MODELS).map((m) => (
                         <option key={m.id} value={m.id}>
                           {m.name}
                         </option>
@@ -329,7 +348,7 @@ export default function SettingsTab() {
                   Connect your OpenAI or OpenRouter API key to enable AI-powered summaries, flashcards, and quizzes.
                 </p>
                 
-                <div className="grid grid-cols-2 gap-2 p-1 bg-surface-100 rounded-lg">
+                <div className="grid grid-cols-3 gap-2 p-1 bg-surface-100 rounded-lg">
                   <button
                     type="button"
                     onClick={() => {
@@ -348,7 +367,7 @@ export default function SettingsTab() {
                     type="button"
                     onClick={() => {
                       setProvider('openrouter');
-                      setModel('google/gemini-2.5-flash');
+                      setModel('meta-llama/llama-3.3-70b-instruct:free');
                     }}
                     className={`py-2 text-sm font-medium rounded-md transition-all cursor-pointer ${
                       provider === 'openrouter'
@@ -358,12 +377,26 @@ export default function SettingsTab() {
                   >
                     OpenRouter
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProvider('gemini');
+                      setModel('gemini-2.5-flash');
+                    }}
+                    className={`py-2 text-sm font-medium rounded-md transition-all cursor-pointer ${
+                      provider === 'gemini'
+                        ? 'bg-white text-surface-900 shadow-sm'
+                        : 'text-surface-500 hover:text-surface-900'
+                    }`}
+                  >
+                    Gemini
+                  </button>
                 </div>
 
                 <Input
-                  label={`${provider === 'openrouter' ? 'OpenRouter' : 'OpenAI'} API Key`}
+                  label={`${provider === 'openrouter' ? 'OpenRouter' : provider === 'gemini' ? 'Google Gemini' : 'OpenAI'} API Key`}
                   type="password"
-                  placeholder={provider === 'openrouter' ? 'sk-or-v1-...' : 'sk-...'}
+                  placeholder={provider === 'openrouter' ? 'sk-or-v1-...' : provider === 'gemini' ? 'AIza... or AQ....' : 'sk-...'}
                   value={apiKey}
                   onChange={(e) => handleKeyChange(e.target.value)}
                   icon={<Key size={16} />}
@@ -376,7 +409,7 @@ export default function SettingsTab() {
                     onChange={(e) => setModel(e.target.value)}
                     className="w-full px-3 py-2.5 rounded-lg border border-surface-200 bg-white text-sm text-surface-700 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                   >
-                    {(provider === 'openrouter' ? OPENROUTER_MODELS : OPENAI_MODELS).map((m) => (
+                    {(provider === 'openrouter' ? OPENROUTER_MODELS : provider === 'gemini' ? GEMINI_MODELS : OPENAI_MODELS).map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.name}
                       </option>
@@ -390,6 +423,13 @@ export default function SettingsTab() {
                       Get your API key from{' '}
                       <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline">
                         OpenRouter Platform →
+                      </a>
+                    </span>
+                  ) : provider === 'gemini' ? (
+                    <span>
+                      Get your API key from{' '}
+                      <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline">
+                        Google AI Studio →
                       </a>
                     </span>
                   ) : (

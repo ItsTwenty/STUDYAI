@@ -3,7 +3,7 @@
 
 export interface AIConfig {
   apiKey: string;
-  provider?: 'openai' | 'openrouter';
+  provider?: 'openai' | 'openrouter' | 'gemini';
   model?: string;
 }
 
@@ -26,11 +26,16 @@ export const setAIConfig = (newConfig: AIConfig) => {
 export const getAIConfig = (): AIConfig | null => {
   // Always read fresh from localStorage so changes take effect immediately
   const savedKey = localStorage.getItem('clevra_openai_key');
-  const savedProvider = localStorage.getItem('clevra_ai_provider') as 'openai' | 'openrouter' | null;
+  const savedProvider = localStorage.getItem('clevra_ai_provider') as 'openai' | 'openrouter' | 'gemini' | null;
   const savedModel = localStorage.getItem('clevra_ai_model') || undefined;
 
   if (savedKey) {
-    const provider = savedProvider || (savedKey.startsWith('sk-or-') ? 'openrouter' : 'openai');
+    let provider = savedProvider;
+    if (!provider) {
+      if (savedKey.startsWith('sk-or-')) provider = 'openrouter';
+      else if (savedKey.startsWith('AIza') || savedKey.startsWith('AQ.')) provider = 'gemini';
+      else provider = 'openai';
+    }
     return { apiKey: savedKey, provider, model: savedModel };
   }
   return null;
@@ -48,17 +53,55 @@ async function callOpenAI(prompt: string, systemPrompt: string): Promise<string>
     throw new Error('No API key configured. Go to Settings to add your key.');
   }
 
-  const provider = currentConfig.provider || (currentConfig.apiKey.startsWith('sk-or-') ? 'openrouter' : 'openai');
-  const apiUrl = provider === 'openrouter'
-    ? 'https://openrouter.ai/api/v1/chat/completions'
-    : 'https://api.openai.com/v1/chat/completions';
+  let provider = currentConfig.provider;
+  if (!provider) {
+    if (currentConfig.apiKey.startsWith('sk-or-')) provider = 'openrouter';
+    else if (currentConfig.apiKey.startsWith('AIza') || currentConfig.apiKey.startsWith('AQ.')) provider = 'gemini';
+    else provider = 'openai';
+  }
 
-  // Default to a truly free OpenRouter model
-  const defaultModel = provider === 'openrouter' ? 'meta-llama/llama-3.3-70b-instruct:free' : 'gpt-4o-mini';
+  let defaultModel = 'gpt-4o-mini';
+  if (provider === 'openrouter') defaultModel = 'meta-llama/llama-3.3-70b-instruct:free';
+  if (provider === 'gemini') defaultModel = 'gemini-2.5-flash';
+  
   const model = currentConfig.model || defaultModel;
 
   console.log(`Calling ${provider} API with key ending in:`, currentConfig.apiKey.slice(-4));
   console.log('Model:', model);
+
+  if (provider === 'gemini') {
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${currentConfig.apiKey}`;
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 2000,
+        }
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      console.error('Gemini error:', error);
+      if (response.status === 400 && error.error?.message?.includes('API key not valid')) {
+        throw new Error('Invalid Gemini API key.');
+      }
+      throw new Error(error.error?.message || `API error ${response.status}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    console.log('Gemini response:', content.substring(0, 100));
+    return content;
+  }
+
+  const apiUrl = provider === 'openrouter'
+    ? 'https://openrouter.ai/api/v1/chat/completions'
+    : 'https://api.openai.com/v1/chat/completions';
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -147,16 +190,19 @@ Mix difficulties: 2 easy, 2 medium, 2 hard. Make questions thought-provoking and
   const response = await callOpenAI(prompt, systemPrompt);
 
   try {
-    // Clean response - remove markdown code blocks if present
-    const cleanedResponse = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const parsed = JSON.parse(cleanedResponse);
+    // Extract JSON array using regex
+    const match = response.match(/\[[\s\S]*\]/);
+    if (!match) {
+      throw new Error('No JSON array found in response');
+    }
+    const parsed = JSON.parse(match[0]);
     return parsed.map((card: any) => ({
       question: card.question,
       answer: card.answer,
       difficulty: card.difficulty || 'medium',
     }));
   } catch (e) {
-    console.error('Failed to parse flashcards:', e, response);
+    console.error('Failed to parse flashcards:', e, '\nRaw response:', response);
     throw new Error('Failed to parse AI response. Please try again.');
   }
 }
@@ -191,8 +237,12 @@ correctAnswer is the index (0-3) of the correct option. Make questions progressi
   const response = await callOpenAI(prompt, systemPrompt);
 
   try {
-    const cleanedResponse = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const parsed = JSON.parse(cleanedResponse);
+    // Extract JSON array using regex
+    const match = response.match(/\[[\s\S]*\]/);
+    if (!match) {
+      throw new Error('No JSON array found in response');
+    }
+    const parsed = JSON.parse(match[0]);
     return parsed.map((q: any) => ({
       question: q.question,
       options: q.options,
@@ -200,7 +250,7 @@ correctAnswer is the index (0-3) of the correct option. Make questions progressi
       explanation: q.explanation,
     }));
   } catch (e) {
-    console.error('Failed to parse quiz:', e, response);
+    console.error('Failed to parse quiz:', e, '\nRaw response:', response);
     throw new Error('Failed to parse AI response. Please try again.');
   }
 }
