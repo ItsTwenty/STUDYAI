@@ -255,26 +255,13 @@ correctAnswer is the index (0-3) of the correct option. Make questions progressi
   }
 }
 
-// Lazy singleton cache for pdfjs-dist
-let pdfjsInstance: any = null;
-let workerInitialized = false;
+import * as pdfjsLib from 'pdfjs-dist';
 
-async function getPdfjs() {
-  if (!pdfjsInstance) {
-    pdfjsInstance = await import('pdfjs-dist');
-  }
-  if (!workerInitialized) {
-    pdfjsInstance.GlobalWorkerOptions.workerSrc =
-      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs';
-    workerInitialized = true;
-  }
-  return pdfjsInstance;
-}
+// Initialize PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs';
 
 // Extract text from PDF using PDF.js with parallel page processing
 export async function extractTextFromPDF(file: File): Promise<string> {
-  const pdfjsLib = await getPdfjs();
-
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const totalPages = pdf.numPages;
